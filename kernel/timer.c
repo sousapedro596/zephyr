@@ -141,6 +141,13 @@ void z_impl_k_timer_start(struct k_timer *timer, k_timeout_t duration,
 {
 	SYS_PORT_TRACING_OBJ_FUNC(k_timer, start, timer, duration, period);
 
+	/* Acquire lock to ensure during timer start configuration,
+	 * mitigating issues when k_timer_start is called concurrently
+	 * for the same timer instance from different contexts.
+	 * This addresses the race condition described in issue #62908.
+	 */
+	k_spinlock_key_t key = k_spin_lock(&lock);
+
 	if (K_TIMEOUT_EQ(duration, K_FOREVER)) {
 		return;
 	}
@@ -168,6 +175,8 @@ void z_impl_k_timer_start(struct k_timer *timer, k_timeout_t duration,
 
 	z_add_timeout(&timer->timeout, z_timer_expiration_handler,
 		     duration);
+
+	k_spin_unlock(&lock, key);
 }
 
 #ifdef CONFIG_USERSPACE
